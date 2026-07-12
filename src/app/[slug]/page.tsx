@@ -27,10 +27,34 @@ function normalizeSlug(slug: string): string {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const slug = normalizeSlug(params.slug);
   try {
-    const { creator } = await resolverApi.resolve(slug).then((r) => r);
+    const { creator, tipUrl } = await resolverApi.resolve(slug);
+    const title       = `Tip ${creator.displayName ?? `@${slug}`} on Novatip`;
+    const description = creator.bio ?? `Send USDC tips to @${slug} in seconds on Stellar.`;
+
     return {
-      title:       `Tip ${creator.displayName ?? `@${slug}`} on Novatip`,
-      description: creator.bio ?? `Send USDC tips to @${slug} in seconds.`,
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        url:      tipUrl,
+        siteName: "Novatip",
+        type:     "profile",
+        images: [
+          {
+            url:    `/api/og/${slug}`,
+            width:  1200,
+            height: 630,
+            alt:    title,
+          },
+        ],
+      },
+      twitter: {
+        card:        "summary_large_image",
+        title,
+        description,
+        images:      [`/api/og/${slug}`],
+      },
     };
   } catch {
     return { title: "Novatip" };
