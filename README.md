@@ -16,11 +16,28 @@ App available at http://localhost:3000
 
 ## Environment Variables
 
-NEXT_PUBLIC_API_URL                  - Backend API base URL (default: http://localhost:3001/api/v1)
-NEXT_PUBLIC_SITE_URL                 - Public origin this deployment is served from (default: http://localhost:3000)
-NEXT_PUBLIC_STELLAR_NETWORK          - testnet or mainnet (default: testnet)
-NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID - Deployed tip_splitter contract ID (required)
-NEXT_PUBLIC_USDC_CONTRACT_ID         - USDC Stellar Asset Contract ID
+Copy `.env.example` to `.env.local` and fill in the values before running `npm run dev`.
+
+Variables marked **required** are validated at build/boot time. The app throws a
+descriptive error naming the variable if one is absent or malformed — the failure
+happens before any request is served, not mid-funnel when a supporter presses Tip.
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID` | **yes** | — | 56-char Soroban contract ID starting with `C`. Missing or malformed → build/boot error. |
+| `NEXT_PUBLIC_API_URL` | no | `http://localhost:3001/api/v1` | Backend API base URL. Override in staging/production. |
+| `NEXT_PUBLIC_SITE_URL` | no | `http://localhost:3000` | Public origin for Open Graph `metadataBase`. Must be an absolute `http(s)` URL. A malformed value fails the build. |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | no | `testnet` | `testnet` or `mainnet`. |
+| `NEXT_PUBLIC_USDC_CONTRACT_ID` | no | `CBIELTK6…QDAMA` | USDC SAC address. Override only for custom local networks. |
+
+### NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID
+
+This is the only variable that is truly required. Without it the SDK cannot
+build a transaction and the tip button will always throw. The validation in
+`src/lib/config.ts` catches both a missing value and a malformed one (wrong
+length, wrong prefix) at the time the config module is first evaluated — during
+`next build` or at server startup — so a misconfiguration fails loudly before
+any user sees the app.
 
 ### NEXT_PUBLIC_SITE_URL
 
