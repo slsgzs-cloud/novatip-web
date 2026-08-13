@@ -276,7 +276,7 @@ function IndexedTipRow({ tip }: { tip: IndexedTip }) {
         </p>
         {tip.message && (
           <p className="text-xs text-fg-faint mt-0.5 truncate">
-            "{tip.message}"
+            &ldquo;{tip.message}&rdquo;
           </p>
         )}
       </div>
@@ -306,7 +306,7 @@ function PendingTipRow({ tip }: { tip: PendingTip }) {
         </p>
         {tip.message && (
           <p className="text-xs text-fg-faint mt-0.5 truncate">
-            "{tip.message}"
+            &ldquo;{tip.message}&rdquo;
           </p>
         )}
       </div>

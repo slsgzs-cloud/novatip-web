@@ -144,9 +144,23 @@ describe("app/[slug]/page – metadata", () => {
   it("describes the creator when the lookup succeeds", async () => {
     resolve.mockResolvedValue(creatorPayload());
 
+    // No `images` in either block — opengraph-image.tsx supplies those via the
+    // Next file convention, so generateMetadata must not set them itself.
     await expect(generateMetadata({ params: { slug: "alice" } })).resolves.toEqual({
       title:       "Tip Alice on Novatip",
       description: "Street violinist",
+      openGraph: {
+        title:       "Tip Alice on Novatip",
+        description: "Street violinist",
+        url:         "https://novatip.xyz/alice",
+        siteName:    "Novatip",
+        type:        "profile",
+      },
+      twitter: {
+        card:        "summary_large_image",
+        title:       "Tip Alice on Novatip",
+        description: "Street violinist",
+      },
     });
   });
 

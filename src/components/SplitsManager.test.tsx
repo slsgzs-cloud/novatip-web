@@ -142,30 +142,30 @@ describe("SplitsManager – add and remove rows", () => {
 describe("SplitsManager – save", () => {
   it("disables Save when bps does not total 10 000", () => {
     setup([{ to: VALID_ADDR_1, bps: 5_000 }]);
-    expect(screen.getByRole("button", { name: /save splits/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /save collaborator splits/i })).toBeDisabled();
   });
 
   it("disables Save when an address is invalid", () => {
     setup([{ to: "INVALID_ADDRESS", bps: 10_000 }]);
-    expect(screen.getByRole("button", { name: /save splits/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /save collaborator splits/i })).toBeDisabled();
   });
 
   it("enables Save when bps is 10 000 and all addresses are valid", () => {
     setup();
-    expect(screen.getByRole("button", { name: /save splits/i })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /save collaborator splits/i })).toBeEnabled();
   });
 
   it("calls onSave with the current rows", async () => {
     const user = userEvent.setup();
     const { saveSpy } = setup();
-    await user.click(screen.getByRole("button", { name: /save splits/i }));
+    await user.click(screen.getByRole("button", { name: /save collaborator splits/i }));
     expect(saveSpy).toHaveBeenCalledWith(SOLO_SPLIT);
   });
 
   it("shows success message after save resolves", async () => {
     const user = userEvent.setup();
     setup();
-    await user.click(screen.getByRole("button", { name: /save splits/i }));
+    await user.click(screen.getByRole("button", { name: /save collaborator splits/i }));
     await waitFor(() => {
       expect(screen.getByText(/splits saved successfully/i)).toBeInTheDocument();
     });
@@ -174,7 +174,7 @@ describe("SplitsManager – save", () => {
   it("shows error message when onSave rejects", async () => {
     const user = userEvent.setup();
     setup(SOLO_SPLIT, () => Promise.reject(new Error("Network timeout")));
-    await user.click(screen.getByRole("button", { name: /save splits/i }));
+    await user.click(screen.getByRole("button", { name: /save collaborator splits/i }));
     await waitFor(() => {
       expect(screen.getByText(/network timeout/i)).toBeInTheDocument();
     });
@@ -188,7 +188,7 @@ describe("SplitsManager – field editing", () => {
     setup([{ to: VALID_ADDR_1, bps: 10_000 }]);
     const bpsInput = screen.getByRole("spinbutton", { name: /recipient 1 basis points/i });
     fireEvent.change(bpsInput, { target: { value: "5000" } });
-    // 5000 bps = 50.0%
-    expect(screen.getByText("50.0%")).toBeInTheDocument();
+    // 5,000 bps renders as 50.0% twice — once on the row, once as the total.
+    expect(screen.getAllByText("50.0%")).toHaveLength(2);
   });
 });

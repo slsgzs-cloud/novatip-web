@@ -111,7 +111,7 @@ export function TipSuccess({ amount, slug, onReset }: TipSuccessProps) {
             Your{" "}
             <span className="text-accent font-semibold">${amount} USDC</span>{" "}
             tip landed in{" "}
-            <span className="text-fg font-medium">@{slug}</span>'s jar.
+            <span className="text-fg font-medium">@{slug}</span>&rsquo;s jar.
           </p>
         </div>
 

@@ -58,26 +58,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title,
       description,
+      // No `images` here on purpose. opengraph-image.tsx in this directory is a
+      // Next file convention: it generates the preview image for this route and
+      // injects the absolute URL into both openGraph and twitter automatically.
+      // Setting them by hand pointed at /api/og/<slug>, a route that does not
+      // exist, which meant every social preview 404'd.
       openGraph: {
         title,
         description,
         url:      tipUrl,
         siteName: "Novatip",
         type:     "profile",
-        images: [
-          {
-            url:    `/api/og/${slug}`,
-            width:  1200,
-            height: 630,
-            alt:    title,
-          },
-        ],
       },
       twitter: {
         card:        "summary_large_image",
         title,
         description,
-        images:      [`/api/og/${slug}`],
       },
     };
   } catch (error) {

@@ -17,6 +17,12 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // lib/config.ts validates this at module load and throws when it is absent,
+    // which is the point of it — but that means importing anything that reaches
+    // config needs a syntactically valid id present. Placeholder, never dialled.
+    env: {
+      NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID: "C" + "A".repeat(55),
+    },
     alias: {
       // Resolve the uninstalled workspace package to our hand-written stub
       "@novatip/sdk": new URL("./src/test/mocks/novatip-sdk.ts", import.meta.url)
