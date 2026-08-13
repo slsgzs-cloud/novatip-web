@@ -20,6 +20,12 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { getTipSplitterClient, makeSignTransaction, usdcToStroops } from "@/lib/wallet";
 import { isValidTipAmount } from "@novatip/sdk";
+import { tipEvents } from "@/lib/tipEvents";
+
+// FRONTEND MESSAGE LENGTH LIMIT
+// TODO: Once the contract-side limit lands and is exported by the SDK,
+// import this value from @novatip/sdk instead of hardcoding here.
+export const MAX_MESSAGE_LENGTH = 200;
 
 interface TipFormProps {
   jarId: string;
@@ -42,7 +48,8 @@ export function TipForm({ jarId, slug }: TipFormProps) {
     try { return usdcToStroops(amount); } catch { return BigInt(0); }
   })();
   const amountValid = isValidTipAmount(stroops);
-  const canSubmit   = isConnected && amountValid && step === "input";
+  const trimmedMessage = message.trim();
+  const canSubmit   = isConnected && amountValid && trimmedMessage.length <= MAX_MESSAGE_LENGTH && step === "input";
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleTip() {
@@ -65,6 +72,13 @@ export function TipForm({ jarId, slug }: TipFormProps) {
 
       setTxAmount(amount);
       setStep("success");
+
+      // Notify RecentTips and Leaderboard so they can refresh immediately
+      tipEvents.emit({
+        fromAddress: publicKey,
+        amount,
+        message: message.trim(),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Transaction failed. Please try again.";
       setError(msg);
@@ -106,32 +120,32 @@ export function TipForm({ jarId, slug }: TipFormProps) {
 
         {/* Message input */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-gray-300">
+          <label className="text-sm font-medium text-fg-muted">
             Message{" "}
-            <span className="text-gray-600 font-normal">(optional)</span>
+            <span className="text-fg-dim font-normal">(optional)</span>
           </label>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             disabled={step === "signing"}
             placeholder="Say something nice… 🎉"
-            maxLength={200}
+            maxLength={MAX_MESSAGE_LENGTH}
             rows={2}
-            className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3
-                       text-sm text-white placeholder:text-gray-600 resize-none
+            className="w-full rounded-xl bg-surface-strong border border-hairline px-4 py-3
+                       text-sm text-fg placeholder:text-fg-dim resize-none
                        focus:outline-none focus:ring-2 focus:ring-brand-500/50
                        transition-all duration-200 disabled:opacity-50"
             aria-label="Optional tip message"
           />
-          <p className="text-right text-xs text-gray-600">
-            {message.length}/200
+          <p className="text-right text-xs text-fg-dim">
+            {trimmedMessage.length}/{MAX_MESSAGE_LENGTH}
           </p>
         </div>
 
         {/* Error banner */}
         {step === "error" && error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3">
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="rounded-xl bg-danger/10 border border-danger/20 px-4 py-3">
+            <p className="text-sm text-danger">{error}</p>
           </div>
         )}
 
@@ -153,13 +167,13 @@ export function TipForm({ jarId, slug }: TipFormProps) {
           </Button>
         ) : (
           <div className="flex flex-col gap-2 items-center">
-            <p className="text-sm text-gray-400">Connect your wallet to send a tip</p>
+            <p className="text-sm text-fg-subtle">Connect your wallet to send a tip</p>
             <WalletConnectButton size="lg" className="w-full" />
           </div>
         )}
 
         {/* Disclaimer */}
-        <p className="text-center text-xs text-gray-600">
+        <p className="text-center text-xs text-fg-faint">
           Tips are final and sent directly on the Stellar network.
           No platform fees.
         </p>

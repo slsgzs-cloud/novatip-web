@@ -16,10 +16,45 @@ App available at http://localhost:3000
 
 ## Environment Variables
 
-NEXT_PUBLIC_API_URL                  - Backend API base URL (default: http://localhost:3001/api/v1)
-NEXT_PUBLIC_STELLAR_NETWORK          - testnet or mainnet (default: testnet)
-NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID - Deployed tip_splitter contract ID (required)
-NEXT_PUBLIC_USDC_CONTRACT_ID         - USDC Stellar Asset Contract ID
+Copy `.env.example` to `.env.local` and fill in the values before running `npm run dev`.
+
+Variables marked **required** are validated at build/boot time. The app throws a
+descriptive error naming the variable if one is absent or malformed — the failure
+happens before any request is served, not mid-funnel when a supporter presses Tip.
+
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID` | **yes** | — | 56-char Soroban contract ID starting with `C`. Missing or malformed → build/boot error. |
+| `NEXT_PUBLIC_API_URL` | no | `http://localhost:3001/api/v1` | Backend API base URL. Override in staging/production. |
+| `NEXT_PUBLIC_SITE_URL` | no | `http://localhost:3000` | Public origin for Open Graph `metadataBase`. Must be an absolute `http(s)` URL. A malformed value fails the build. |
+| `NEXT_PUBLIC_STELLAR_NETWORK` | no | `testnet` | `testnet` or `mainnet`. |
+| `NEXT_PUBLIC_USDC_CONTRACT_ID` | no | `CBIELTK6…QDAMA` | USDC SAC address. Override only for custom local networks. |
+
+### NEXT_PUBLIC_TIP_SPLITTER_CONTRACT_ID
+
+This is the only variable that is truly required. Without it the SDK cannot
+build a transaction and the tip button will always throw. The validation in
+`src/lib/config.ts` catches both a missing value and a malformed one (wrong
+length, wrong prefix) at the time the config module is first evaluated — during
+`next build` or at server startup — so a misconfiguration fails loudly before
+any user sees the app.
+
+### NEXT_PUBLIC_SITE_URL
+
+This one has to be set per deployment rather than once in the repo — production
+gets the real domain, each preview deployment gets its own host.
+
+It backs `metadataBase` in `src/app/layout.tsx`, which is what every relative
+metadata URL is resolved against. Open Graph images are the reason it matters:
+tip links spread by being pasted into Twitter, WhatsApp and Discord, and a
+preview image still pointing at `localhost:3000` is one no scraper can fetch.
+
+It must be an absolute `http` or `https` URL — `https://novatip.xyz`, not
+`novatip.xyz`. A malformed value fails the build with a message naming it,
+rather than falling back to localhost and shipping broken previews; see
+`resolveSiteUrl` in `src/lib/config.ts`. Trailing slashes, whitespace, and any
+query or fragment are normalised away, so `https://novatip.xyz` and
+`https://novatip.xyz/` are equivalent.
 
 ## Key Pages
 
@@ -58,6 +93,27 @@ NEXT_PUBLIC_USDC_CONTRACT_ID         - USDC Stellar Asset Contract ID
 4. JWT stored in localStorage
 5. JWT attached to all authenticated API requests
 
+## Theming
+
+Light and dark are driven by a `dark` class on `<html>` (Tailwind `darkMode: "class"`).
+
+The theme is applied **before the first paint** by a small blocking inline script in
+the `<head>` of `src/app/layout.tsx` — `THEME_INIT_SCRIPT`, defined in `src/lib/theme.ts`.
+It reads `localStorage.novatip_theme` and falls back to `prefers-color-scheme`. Because
+the server render cannot know the result, `<html>` carries `suppressHydrationWarning`.
+
+Two rules keep it flash-free:
+
+- **Never re-derive the theme after hydration.** `ThemeToggle` reads the class the
+  script already applied (`getAppliedTheme()`), it does not read storage and re-apply.
+- **Style with the semantic tokens, not raw colours.** Use `bg-canvas`, `bg-surface`,
+  `border-hairline`, `text-fg` / `-muted` / `-subtle` / `-faint` / `-dim`, `text-accent`,
+  and `success` / `warning` / `danger`. They are CSS variables defined for both themes in
+  `src/app/globals.css` and mapped in `tailwind.config.ts`; opacity modifiers still work
+  (`bg-canvas/80`). Reach for a literal colour or a `dark:` variant only when a value is
+  genuinely theme-independent — e.g. `text-white` on a brand-coloured button, or the QR
+  code's white backing.
+
 ## Scripts
 
     npm run dev       - hot reload dev server
@@ -66,6 +122,29 @@ NEXT_PUBLIC_USDC_CONTRACT_ID         - USDC Stellar Asset Contract ID
     npm run typecheck - tsc --noEmit
     npm run lint      - eslint
     npm run format    - prettier
+    npm test          - run tests once (Vitest)
+    npm run test:watch - run tests in watch mode
+
+## Testing
+
+The project uses [Vitest](https://vitest.dev) with [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/).
+
+**Running tests**
+
+    npm test            # single run, exits with pass/fail
+    npm run test:watch  # watch mode — re-runs on file changes
+
+**Writing tests**
+
+Place test files next to the source they test: `src/components/Foo.test.tsx` or `src/lib/bar.test.ts`. They are picked up automatically.
+
+Vitest globals (`describe`, `it`, `expect`, `vi`) are available without imports. `@testing-library/jest-dom` matchers (`.toBeInTheDocument()`, `.toBeDisabled()`, etc.) are loaded globally via `src/test/setup.ts`.
+
+If a test depends on `@novatip/sdk`, the stub at `src/test/mocks/novatip-sdk.ts` is resolved automatically. To override specific exports in a single test file, use `vi.mock('@novatip/sdk', ...)`.
+
+**CI**
+
+`npm test` runs as part of the GitHub Actions CI pipeline defined in `.github/workflows/ci.yml`, alongside lint, typecheck, and build steps.
 
 ## License
 MIT

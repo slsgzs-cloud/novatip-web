@@ -12,6 +12,8 @@
 import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/Button";
+import { CopyFallback } from "@/components/CopyFallback";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 
 interface QRDownloadProps {
@@ -21,22 +23,19 @@ interface QRDownloadProps {
 }
 
 export function QRDownload({ slug, pngUrl, className }: QRDownloadProps) {
-  const [copied,      setCopied]      = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const { copied, failed, copy, reset } = useCopyToClipboard();
 
   const tipUrl = typeof window !== "undefined"
     ? `${window.location.origin}/${slug}`
     : `https://novatip.xyz/${slug}`;
 
   // ── Copy link ──────────────────────────────────────────────────────────────
+  // A failure surfaces as the CopyFallback below rather than doing nothing —
+  // sharing this link is the whole point of the page, so a silent no-op would
+  // leave the user believing they had it when they did not.
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(tipUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API not available — silent fail
-    }
+    await copy(tipUrl);
   }
 
   // ── Download PNG ───────────────────────────────────────────────────────────
@@ -61,9 +60,9 @@ export function QRDownload({ slug, pngUrl, className }: QRDownloadProps) {
   return (
     <div className={cn("flex flex-col items-center gap-4", className)}>
 
-      {/* QR preview */}
+      {/* QR preview — always on white so scanners keep their contrast */}
       <div
-        className="rounded-2xl bg-white p-4 shadow-xl shadow-black/30"
+        className="rounded-2xl bg-white p-4 shadow-xl shadow-black/10 dark:shadow-black/30"
         aria-label={`QR code for @${slug} tip page`}
       >
         <QRCodeSVG
@@ -77,19 +76,34 @@ export function QRDownload({ slug, pngUrl, className }: QRDownloadProps) {
       </div>
 
       {/* Tip URL display */}
-      <div className="flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 w-full max-w-xs">
-        <span className="flex-1 text-xs text-gray-400 font-mono truncate">
+      <div className="flex items-center gap-2 rounded-xl bg-surface-strong border border-hairline px-4 py-2.5 w-full max-w-xs">
+        <span className="flex-1 text-xs text-fg-subtle font-mono truncate">
           {tipUrl}
         </span>
         <button
           type="button"
           onClick={handleCopy}
-          className="text-xs text-brand-400 hover:text-brand-300 transition-colors shrink-0 font-medium"
+          className={cn(
+            "text-xs transition-colors shrink-0 font-medium",
+            failed
+              ? "text-danger hover:text-danger"
+              : "text-accent hover:text-accent-strong",
+          )}
           aria-label="Copy tip URL"
         >
-          {copied ? "Copied!" : "Copy"}
+          {failed ? "Failed" : copied ? "Copied!" : "Copy"}
         </button>
       </div>
+
+      {/* Manual escape hatch when the browser refuses the clipboard */}
+      {failed && (
+        <CopyFallback
+          text={tipUrl}
+          onDismiss={reset}
+          noun="tip link"
+          className="max-w-xs"
+        />
+      )}
 
       {/* Action buttons */}
       <div className="flex gap-3 w-full max-w-xs">
@@ -110,11 +124,11 @@ export function QRDownload({ slug, pngUrl, className }: QRDownloadProps) {
           onClick={handleCopy}
           aria-label="Copy tip link"
         >
-          {copied ? "✓ Copied" : "Copy link"}
+          {failed ? "Copy failed" : copied ? "✓ Copied" : "Copy link"}
         </Button>
       </div>
 
-      <p className="text-xs text-gray-600 text-center">
+      <p className="text-xs text-fg-faint text-center">
         Print or share your QR code so anyone can tap to tip you
       </p>
     </div>

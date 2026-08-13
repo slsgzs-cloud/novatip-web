@@ -9,7 +9,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import type { Metadata } from "next";
-import { resolverApi } from "@/lib/api";
+import { ApiError, resolverApi, type ResolvedPage } from "@/lib/api";
 import { Header } from "@/components/Header";
 import { TipForm } from "@/components/TipForm";
 import { Badge } from "@/components/ui/Badge";
@@ -24,8 +24,32 @@ function normalizeSlug(slug: string): string {
   return decodeURIComponent(slug).replace(/^@/, "");
 }
 
+/** True for the one failure that means "nobody has claimed this slug". */
+function isUnclaimedSlug(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
+/**
+ * Resolve the creator, or hand control to the right boundary.
+ *
+ * Only a 404 from the resolver means the slug is unclaimed.  Every other
+ * failure — a 500, a timeout, the backend being unreachable — is our fault,
+ * and rendering "no tip jar here" for those would tell a visitor a creator
+ * does not exist when they do, sending them away for good over a blip.  Those
+ * are rethrown so app/error.tsx offers a retry instead.
+ */
+async function resolveCreator(slug: string): Promise<ResolvedPage> {
+  try {
+    return await resolverApi.resolve(slug);
+  } catch (error) {
+    if (isUnclaimedSlug(error)) notFound();
+    throw error;
+  }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const slug = normalizeSlug(params.slug);
+
   try {
     const { creator, tipUrl } = await resolverApi.resolve(slug);
     const title       = `Tip ${creator.displayName ?? `@${slug}`} on Novatip`;
@@ -56,7 +80,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         images:      [`/api/og/${slug}`],
       },
     };
-  } catch {
+  } catch (error) {
+    // Bailing out here as well as in the page body is what gets a dead link
+    // the right <title>.  Metadata is resolved before the shell is flushed, so
+    // this is the last point at which we can still influence what a link
+    // scraper reads; leave it out and a mistyped slug is served under the
+    // generic "Novatip" title.  It does not fix the *status* — see the note in
+    // not-found.tsx about loading.tsx pinning that at 200.
+    if (isUnclaimedSlug(error)) notFound();
+
+    // A transient backend failure must not become a 404; leave the title
+    // generic and let the page body decide what to do about it.
     return { title: "Novatip" };
   }
 }
@@ -64,14 +98,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function TipPage({ params }: Props) {
   const slug = normalizeSlug(params.slug);
 
-  let resolved;
-  try {
-    resolved = await resolverApi.resolve(slug);
-  } catch {
-    notFound();
-  }
-
-  const { creator, qrPngUrl } = resolved;
+  const { creator, qrPngUrl } = await resolveCreator(slug);
   const displayName = creator.displayName ?? `@${slug}`;
   const avatarUrl   =
     creator.avatarUrl ??
@@ -95,11 +122,11 @@ export default async function TipPage({ params }: Props) {
               />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">{displayName}</h1>
-              <p className="text-sm text-brand-400 font-mono">@{slug}</p>
+              <h1 className="text-2xl font-bold text-fg">{displayName}</h1>
+              <p className="text-sm text-accent font-mono">@{slug}</p>
             </div>
             {creator.bio && (
-              <p className="text-sm text-gray-400 max-w-xs">{creator.bio}</p>
+              <p className="text-sm text-fg-subtle max-w-xs">{creator.bio}</p>
             )}
             <div className="flex gap-2 flex-wrap justify-center">
               <Badge variant="usdc">USDC tips</Badge>

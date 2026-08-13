@@ -3,116 +3,82 @@
 /**
  * ThemeToggle.tsx
  *
- * Dark / light mode toggle button.
- * Persists the user's preference to localStorage and applies the
- * appropriate Tailwind `dark` class to the document root.
+ * Switches between the light and dark themes.
+ *
+ * The theme is already on <html> by the time this mounts — THEME_INIT_SCRIPT
+ * (see lib/theme.ts) put it there before the first paint.  So this component
+ * deliberately does *not* re-derive the theme from localStorage on mount, and
+ * it holds no React state for it either: the icon and label are swapped by the
+ * `dark:` variants below, driven by the same class.
+ *
+ * That is what keeps the button flash-free and hydration-safe — the server
+ * renders exactly what the client renders, and CSS decides which half is
+ * visible.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { cn } from "@/lib/utils";
+import {
+  DARK_MEDIA_QUERY,
+  THEME_STORAGE_KEY,
+  applyTheme,
+  getAppliedTheme,
+  getStoredPreference,
+  resolvePreference,
+  setThemePreference,
+} from "@/lib/theme";
 
-type Theme = "dark" | "light";
-
-function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
-  const stored = localStorage.getItem("novatip_theme") as Theme | null;
-  if (stored) return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
+interface ThemeToggleProps {
+  className?: string;
 }
 
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === "dark") {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
-  localStorage.setItem("novatip_theme", theme);
-}
-
-export function ThemeToggle({ className }: { className?: string }) {
-  const [theme,   setTheme]   = useState<Theme>("dark");
-  const [mounted, setMounted] = useState(false);
-
-  // Only run on client to avoid hydration mismatch
+export function ThemeToggle({ className }: ThemeToggleProps) {
+  // Follow the OS while the user has not made an explicit choice.
   useEffect(() => {
-    const initial = getInitialTheme();
-    setTheme(initial);
-    applyTheme(initial);
-    setMounted(true);
+    if (typeof window.matchMedia !== "function") return;
+
+    const query = window.matchMedia(DARK_MEDIA_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (getStoredPreference() !== "system") return;
+      applyTheme(event.matches ? "dark" : "light");
+    };
+
+    query.addEventListener("change", handleChange);
+    return () => query.removeEventListener("change", handleChange);
   }, []);
 
-  function toggle() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    applyTheme(next);
-  }
+  // Keep other tabs in sync when the preference changes.
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      // key === null means localStorage was cleared wholesale.
+      if (event.key !== null && event.key !== THEME_STORAGE_KEY) return;
+      applyTheme(resolvePreference(getStoredPreference()));
+    };
 
-  // Render a placeholder during SSR to avoid layout shift
-  if (!mounted) {
-    return (
-      <div
-        className={cn(
-          "h-8 w-8 rounded-lg bg-white/5 border border-white/10",
-          className,
-        )}
-        aria-hidden="true"
-      />
-    );
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  function handleClick() {
+    setThemePreference(getAppliedTheme() === "dark" ? "light" : "dark");
   }
 
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={handleClick}
       className={cn(
-        "h-8 w-8 rounded-lg flex items-center justify-center",
-        "bg-white/5 border border-white/10",
-        "hover:bg-white/10 transition-colors",
+        "inline-flex h-9 w-9 items-center justify-center rounded-lg",
+        "text-fg-subtle transition-colors hover:bg-surface-strong hover:text-fg",
         "focus:outline-none focus:ring-2 focus:ring-brand-500/50",
         className,
       )}
-      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
     >
-      {theme === "dark" ? (
-        // Sun icon
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-yellow-400"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-        </svg>
-      ) : (
-        // Moon icon
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="text-blue-300"
-          aria-hidden="true"
-        >
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-      )}
+      {/* Icon + accessible name both track the applied class, via CSS only. */}
+      <span className="text-base dark:hidden" aria-hidden="true">🌙</span>
+      <span className="text-base hidden dark:inline" aria-hidden="true">☀️</span>
+      <span className="sr-only dark:hidden">Switch to dark theme</span>
+      <span className="sr-only hidden dark:inline">Switch to light theme</span>
     </button>
   );
 }
