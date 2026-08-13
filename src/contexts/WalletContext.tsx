@@ -51,13 +51,39 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error,        setError]        = useState<string | null>(null);
 
-  // Rehydrate from localStorage on mount
+  // Rehydrate from localStorage on mount. The two are restored independently:
+  // a connected wallet with no creator session is the normal state for someone
+  // who only came to tip, and requiring both would log them straight back out.
   useEffect(() => {
+    const storedPk = localStorage.getItem(PK_STORAGE_KEY);
+    if (storedPk) setPublicKey(storedPk);
+
     const storedJwt = localStorage.getItem(JWT_STORAGE_KEY);
-    const storedPk  = localStorage.getItem(PK_STORAGE_KEY);
-    if (storedJwt && storedPk) {
-      setJwt(storedJwt);
-      setPublicKey(storedPk);
+    if (storedJwt) setJwt(storedJwt);
+  }, []);
+
+  /**
+   * Exchange a wallet signature for a creator session (SIWS).
+   *
+   * Only the creator dashboard needs this. Sending a tip does not: the tip is
+   * an on-chain transaction the wallet signs directly, and the backend is never
+   * in that path. Returns null instead of throwing so a sign-in failure cannot
+   * take the wallet connection down with it.
+   */
+  const signIn = useCallback(async (pk: string): Promise<string | null> => {
+    try {
+      const { nonce } = await authApi.challenge(pk);
+      const network = getNetworkConfig();
+      const signature = await freighter.signTransaction(nonce, network.passphrase);
+      const { jwt: token } = await authApi.verify(pk, signature, pk);
+
+      localStorage.setItem(JWT_STORAGE_KEY, token);
+      setJwt(token);
+      return token;
+    } catch {
+      // Deliberately quiet. A supporter tipping never needs a session, so a
+      // failure here must not surface as "wallet connection failed".
+      return null;
     }
   }, []);
 
@@ -67,37 +93,27 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (!freighter.isAvailable()) {
-        throw new Error("Freighter wallet extension not found. Please install it from freighter.app");
+        throw new Error(
+          "Freighter wallet extension not found. Install it from freighter.app, then reload this page.",
+        );
       }
 
-      // 1. Get the public key from Freighter
+      // Connecting means one thing: we know which account the user is. That is
+      // everything the tip flow requires, so it is committed immediately and
+      // nothing after this point can un-connect the wallet.
       const pk = await freighter.getPublicKey();
-
-      // 2. Request a SIWS challenge nonce from the backend
-      const { nonce } = await authApi.challenge(pk);
-
-      // 3. Sign the nonce with Freighter
-      //    Freighter signs the raw nonce as a transaction-less message
-      const network  = getNetworkConfig();
-      const signedXdr = await freighter.signTransaction(nonce, network.passphrase);
-
-      // 4. Verify with backend — exchange signature for JWT
-      //    We pass the signed XDR as signatureHex and pk as publicKeyHex
-      //    (backend handles the encoding)
-      const { jwt: token } = await authApi.verify(pk, signedXdr, pk);
-
-      // 5. Persist session
-      localStorage.setItem(JWT_STORAGE_KEY, token);
       localStorage.setItem(PK_STORAGE_KEY, pk);
       setPublicKey(pk);
-      setJwt(token);
+
+      // Best-effort creator session for the dashboard. Never blocks a tip.
+      void signIn(pk);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Wallet connection failed.";
       setError(message);
     } finally {
       setIsConnecting(false);
     }
-  }, []);
+  }, [signIn]);
 
   const disconnect = useCallback(() => {
     localStorage.removeItem(JWT_STORAGE_KEY);
