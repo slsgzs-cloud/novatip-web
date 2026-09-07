@@ -8,16 +8,18 @@
  * which redirects to the connect flow if not connected.
  */
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useWallet } from "@/contexts/WalletContext";
 
 export function useAuth() {
   const wallet = useWallet();
   const router = useRouter();
+  const pathname = usePathname();
 
   function requireAuth() {
     if (!wallet.isConnected) {
-      router.push("/?connect=true");
+      const redirect = encodeURIComponent(pathname);
+      router.push(`/?connect=true&redirect=${redirect}`);
       return false;
     }
     return true;

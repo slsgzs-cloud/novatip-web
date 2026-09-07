@@ -115,11 +115,11 @@ export const authApi = {
       body: JSON.stringify({ walletAddress }),
     }),
 
-  verify: (walletAddress: string, signatureHex: string, publicKeyHex: string, options?: RequestOptions) =>
+  verify: (walletAddress: string, signatureHex: string, options?: RequestOptions) =>
     request<{ jwt: string; isNewUser: boolean }>("/auth/verify", {
       ...options,
       method: "POST",
-      body: JSON.stringify({ walletAddress, signatureHex, publicKeyHex }),
+      body: JSON.stringify({ walletAddress, signatureHex }),
     }),
 
   me: (jwt: string, options?: RequestOptions) =>
