@@ -14,6 +14,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/Button";
 import { CopyFallback } from "@/components/CopyFallback";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { getTipUrl } from "@/lib/tipUrl";
 import { cn } from "@/lib/utils";
 
 interface QRDownloadProps {
@@ -26,9 +27,7 @@ export function QRDownload({ slug, pngUrl, className }: QRDownloadProps) {
   const [downloading, setDownloading] = useState(false);
   const { copied, failed, copy, reset } = useCopyToClipboard();
 
-  const tipUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/${slug}`
-    : `https://novatip.xyz/${slug}`;
+  const tipUrl = getTipUrl(slug);
 
   // ── Copy link ──────────────────────────────────────────────────────────────
   // A failure surfaces as the CopyFallback below rather than doing nothing —
