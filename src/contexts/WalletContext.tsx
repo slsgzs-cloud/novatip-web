@@ -24,6 +24,7 @@ import React, {
 import { freighter, getNetworkConfig } from "@/lib/wallet";
 import { authApi } from "@/lib/api";
 import { onUnauthorized } from "@/lib/authEvents";
+import { isJwtExpired } from "@/lib/jwt";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (storedPk) setPublicKey(storedPk);
 
     const storedJwt = localStorage.getItem(JWT_STORAGE_KEY);
-    if (storedJwt) setJwt(storedJwt);
+    if (storedJwt) {
+      // Skip the guaranteed-failing round trip for a token that's already
+      // expired. The server still gets the final say on every other case.
+      if (isJwtExpired(storedJwt)) {
+        localStorage.removeItem(JWT_STORAGE_KEY);
+      } else {
+        setJwt(storedJwt);
+      }
+    }
   }, []);
 
   // A 401 from any API call means the session is no longer valid (expired or
