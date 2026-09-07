@@ -1,12 +1,17 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Header } from "@/components/Header";
 import { Button } from "@/components/ui/Button";
+import { ConnectPrompt } from "@/components/ConnectPrompt";
 
 export default function HomePage() {
   return (
     <>
       <Header />
       <main className="mx-auto max-w-4xl px-4 py-24 text-center">
+        <Suspense fallback={null}>
+          <ConnectPrompt />
+        </Suspense>
         <h1 className="text-5xl font-bold tracking-tight text-fg mb-6">
           Tip any creator in{" "}
           <span className="text-gradient">2 seconds</span>
