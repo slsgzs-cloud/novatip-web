@@ -21,7 +21,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { analyticsApi } from "@/lib/api";
 import { tipEvents, type TipSuccessPayload } from "@/lib/tipEvents";
-import { formatUsdc } from "@novatip/sdk";
+import { formatUsdc, shortenAddress } from "@novatip/sdk";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
@@ -49,10 +49,6 @@ interface PendingTip {
 type FeedEntry = IndexedTip | PendingTip;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 5)}...${addr.slice(-4)}`;
-}
 
 function timeAgo(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -267,7 +263,7 @@ function IndexedTipRow({ tip }: { tip: IndexedTip }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm text-fg">
           <span className="font-mono text-fg-subtle">
-            {shortAddress(tip.fromAddress)}
+            {shortenAddress(tip.fromAddress)}
           </span>
           {" "}tipped{" "}
           <span className="font-semibold text-accent">
@@ -297,7 +293,7 @@ function PendingTipRow({ tip }: { tip: PendingTip }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm text-fg">
           <span className="font-mono text-fg-subtle">
-            {shortAddress(tip.fromAddress)}
+            {shortenAddress(tip.fromAddress)}
           </span>
           {" "}tipped{" "}
           <span className="font-semibold text-accent">
