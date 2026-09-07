@@ -21,7 +21,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import { freighter, getNetworkConfig } from "@/lib/wallet";
+import { freighter, signNonce } from "@/lib/wallet";
 import { authApi } from "@/lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -68,21 +68,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
    * Only the creator dashboard needs this. Sending a tip does not: the tip is
    * an on-chain transaction the wallet signs directly, and the backend is never
    * in that path. Returns null instead of throwing so a sign-in failure cannot
-   * take the wallet connection down with it.
+   * take the wallet connection down with it — the connected `error` state is
+   * still set so the failure (rejected, wallet locked, nonce expired) is visible.
    */
   const signIn = useCallback(async (pk: string): Promise<string | null> => {
     try {
       const { nonce } = await authApi.challenge(pk);
-      const network = getNetworkConfig();
-      const signature = await freighter.signTransaction(nonce, network.passphrase);
-      const { jwt: token } = await authApi.verify(pk, signature, pk);
+      const signatureHex = await signNonce(nonce, pk);
+      const { jwt: token } = await authApi.verify(pk, signatureHex);
 
       localStorage.setItem(JWT_STORAGE_KEY, token);
       setJwt(token);
       return token;
-    } catch {
-      // Deliberately quiet. A supporter tipping never needs a session, so a
-      // failure here must not surface as "wallet connection failed".
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sign-in failed. Please try again.";
+      setError(message);
       return null;
     }
   }, []);
