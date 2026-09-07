@@ -70,7 +70,7 @@ export function SlugStep({ jwt, onNext }: SlugStepProps) {
         <h2 className="text-xl font-bold text-fg mb-1">Claim your slug</h2>
         <p className="text-sm text-fg-subtle">
           Your tip page will live at{" "}
-          <span className="text-accent font-mono">novatip.xyz/@{slug || "you"}</span>
+          <span className="text-accent font-mono">novatip.xyz/{slug || "you"}</span>
         </p>
       </div>
 
