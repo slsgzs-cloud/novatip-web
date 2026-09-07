@@ -20,6 +20,17 @@ export interface SplitRow {
   bps: number;
 }
 
+// Rows carry a client-only id so React can key on stable identity instead of
+// array index. It never leaves the component — see handleSave, which strips
+// it before calling onSave.
+interface SplitRowState extends SplitRow {
+  id: string;
+}
+
+function withId(row: SplitRow): SplitRowState {
+  return { ...row, id: crypto.randomUUID() };
+}
+
 interface SplitsManagerProps {
   initial:    SplitRow[];
   onSave:     (splits: SplitRow[]) => Promise<void>;
@@ -27,7 +38,9 @@ interface SplitsManagerProps {
 }
 
 export function SplitsManager({ initial, onSave, disabled = false }: SplitsManagerProps) {
-  const [rows,    setRows]    = useState<SplitRow[]>(initial.length > 0 ? initial : [{ to: "", bps: 10000 }]);
+  const [rows,    setRows]    = useState<SplitRowState[]>(
+    (initial.length > 0 ? initial : [{ to: "", bps: 10000 }]).map(withId),
+  );
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -49,7 +62,7 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { to: "", bps: 0 }]);
+    setRows((prev) => [...prev, withId({ to: "", bps: 0 })]);
   }
 
   function removeRow(index: number) {
@@ -63,7 +76,9 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
     setError(null);
     setSuccess(false);
     try {
-      await onSave(rows);
+      // The id is a client-only React key — the backend and contract only
+      // ever expect { to, bps }.
+      await onSave(rows.map(({ id, ...row }) => row));
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save splits.");
@@ -78,7 +93,7 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
       {/* Rows */}
       <div className="flex flex-col gap-3">
         {rows.map((row, i) => (
-          <div key={i} className="flex items-start gap-2">
+          <div key={row.id} className="flex items-start gap-2">
 
             {/* Address */}
             <div className="flex-1 min-w-0">
