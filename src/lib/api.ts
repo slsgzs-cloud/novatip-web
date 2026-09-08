@@ -6,6 +6,7 @@
  */
 
 import { config } from "./config";
+import { emitUnauthorized } from "./authEvents";
 
 export interface RequestOptions extends Omit<RequestInit, "signal"> {
   timeout?: number;
@@ -92,6 +93,12 @@ async function request<T>(
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as Record<string, unknown>;
     const err  = body["error"] as Record<string, unknown> | undefined;
+
+    // A 401 from any endpoint means the session is no longer valid, whether
+    // it expired or was never valid to begin with. Handle it in one place
+    // rather than leaving every caller to notice its own 401.
+    if (res.status === 401) emitUnauthorized();
+
     throw new ApiError(
       res.status,
       (err?.["code"] as string) ?? "UNKNOWN",

@@ -20,6 +20,29 @@ export interface SplitRow {
   bps: number;
 }
 
+// Rows carry a client-only id so React can key on stable identity instead of
+// array index. It never leaves the component — see handleSave, which strips
+// it before calling onSave. bps is kept as the raw string the user typed,
+// not parsed until save, so an unparseable entry can never collapse into
+// NaN in state.
+interface SplitRowState {
+  id:  string;
+  to:  string;
+  bps: string;
+}
+
+function withId(row: SplitRow): SplitRowState {
+  return { id: crypto.randomUUID(), to: row.to, bps: String(row.bps) };
+}
+
+// Only a plain non-negative integer string counts as a valid bps entry —
+// null covers both "still empty" (mid-typing) and genuinely invalid input.
+function parseBpsInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  return Number(trimmed);
+}
+
 interface SplitsManagerProps {
   initial:    SplitRow[];
   onSave:     (splits: SplitRow[]) => Promise<void>;
@@ -27,29 +50,28 @@ interface SplitsManagerProps {
 }
 
 export function SplitsManager({ initial, onSave, disabled = false }: SplitsManagerProps) {
-  const [rows,    setRows]    = useState<SplitRow[]>(initial.length > 0 ? initial : [{ to: "", bps: 10000 }]);
+  const [rows,    setRows]    = useState<SplitRowState[]>(
+    (initial.length > 0 ? initial : [{ to: "", bps: 10000 }]).map(withId),
+  );
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const totalBps    = rows.reduce((s, r) => s + (r.bps || 0), 0);
-  const bpsValid    = validateSplitsBps(rows.map((r) => r.bps));
+  const parsedBps   = rows.map((r) => parseBpsInput(r.bps));
+  const totalBps    = parsedBps.reduce<number>((s, v) => s + (v ?? 0), 0);
+  const bpsValid    = parsedBps.every((v) => v !== null) && validateSplitsBps(parsedBps as number[]);
   const addressesOk = rows.every((r) => /^G[A-Z2-7]{55}$/.test(r.to));
   const canSave     = bpsValid && addressesOk && !saving && !disabled;
 
   function updateRow(index: number, field: keyof SplitRow, value: string) {
     setSuccess(false);
     setRows((prev) =>
-      prev.map((row, i) =>
-        i === index
-          ? { ...row, [field]: field === "bps" ? parseInt(value || "0", 10) : value }
-          : row,
-      ),
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
     );
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { to: "", bps: 0 }]);
+    setRows((prev) => [...prev, { id: crypto.randomUUID(), to: "", bps: "" }]);
   }
 
   function removeRow(index: number) {
@@ -63,7 +85,10 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
     setError(null);
     setSuccess(false);
     try {
-      await onSave(rows);
+      // The id is a client-only React key, and bps is parsed from the raw
+      // input here (canSave already guarantees every row parses cleanly) —
+      // the backend and contract only ever expect finite integer { to, bps }.
+      await onSave(rows.map((row) => ({ to: row.to, bps: parseBpsInput(row.bps)! })));
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save splits.");
@@ -78,7 +103,7 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
       {/* Rows */}
       <div className="flex flex-col gap-3">
         {rows.map((row, i) => (
-          <div key={i} className="flex items-start gap-2">
+          <div key={row.id} className="flex items-start gap-2">
 
             {/* Address */}
             <div className="flex-1 min-w-0">
@@ -100,16 +125,18 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
             <div className="w-28 shrink-0">
               <div className="relative">
                 <input
-                  type="number"
-                  min={1}
-                  max={10000}
-                  value={row.bps || ""}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={row.bps}
                   onChange={(e) => updateRow(i, "bps", e.target.value)}
                   disabled={saving || disabled}
                   placeholder="bps"
                   aria-label={`Recipient ${i + 1} basis points`}
+                  aria-invalid={row.bps !== "" && parsedBps[i] === null}
                   className={cn(
-                    "w-full rounded-xl bg-surface-strong border border-hairline",
+                    "w-full rounded-xl bg-surface-strong border",
+                    row.bps !== "" && parsedBps[i] === null ? "border-danger" : "border-hairline",
                     "px-3 pr-10 py-2.5 text-sm text-fg text-right",
                     "focus:outline-none focus:ring-2 focus:ring-brand-500/50",
                     "disabled:opacity-50 transition-all duration-200",
@@ -119,8 +146,17 @@ export function SplitsManager({ initial, onSave, disabled = false }: SplitsManag
                   bps
                 </span>
               </div>
-              <p className="text-right text-xs text-fg-dim mt-1">
-                {row.bps ? `${(row.bps / 100).toFixed(1)}%` : "0%"}
+              <p
+                className={cn(
+                  "text-right text-xs mt-1",
+                  row.bps !== "" && parsedBps[i] === null ? "text-danger" : "text-fg-dim",
+                )}
+              >
+                {row.bps !== "" && parsedBps[i] === null
+                  ? "Whole number only"
+                  : parsedBps[i] !== null
+                    ? `${(parsedBps[i]! / 100).toFixed(1)}%`
+                    : "0%"}
               </p>
             </div>
 
