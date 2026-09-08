@@ -54,7 +54,12 @@ export default function HistoryPage() {
     analyticsApi
       .recent(jwt, currentLimit)
       .then((r) => {
-        setTips(r.tips);
+        // Append only new items — avoids re-downloading every page and
+        // preserves scroll position.
+        setTips((prev) => {
+          const newItems = r.tips.slice(prev.length);
+          return [...prev, ...newItems];
+        });
         setHasMore(r.tips.length === currentLimit);
         setError(null);
       })
@@ -66,8 +71,14 @@ export default function HistoryPage() {
     fetchTips(limit);
   }, [fetchTips, limit]);
 
+  // Backend caps limit at 100 — cap on the client side so we never send
+  // an invalid request. Disable the button once we hit the cap.
+  const BACKEND_MAX = 100;
+  const atLimit = limit >= BACKEND_MAX;
+
   function loadMore() {
-    const next = limit + PAGE_SIZE;
+    if (atLimit) return;
+    const next = Math.min(limit + PAGE_SIZE, BACKEND_MAX);
     setLimit(next);
   }
 
@@ -155,14 +166,14 @@ export default function HistoryPage() {
           </div>
         )}
 
-        {/* Load more */}
+        {/* {atLimit ? "Showing all tips (100 max)" : "Load more"} */}
         {hasMore && tips.length > 0 && (
           <div className="pt-4 flex justify-center">
             <Button
               variant="ghost"
               size="sm"
               loading={loading}
-              onClick={loadMore}
+              onClick={loadMore} disabled={atLimit}
             >
               Load more
             </Button>
