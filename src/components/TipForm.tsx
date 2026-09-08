@@ -30,11 +30,12 @@ export const MAX_MESSAGE_LENGTH = 200;
 interface TipFormProps {
   jarId: string;
   slug:  string;
+  splits?: Array<{ to: string; bps: number }>;
 }
 
 type FormStep = "input" | "signing" | "success" | "error";
 
-export function TipForm({ jarId, slug }: TipFormProps) {
+export function TipForm({ jarId, slug, splits }: TipFormProps) {
   const { publicKey, isConnected } = useWallet();
 
   const [amount,  setAmount]  = useState("2");
@@ -50,6 +51,18 @@ export function TipForm({ jarId, slug }: TipFormProps) {
   const amountValid = isValidTipAmount(stroops);
   const trimmedMessage = message.trim();
   const canSubmit   = isConnected && amountValid && trimmedMessage.length <= MAX_MESSAGE_LENGTH && step === "input";
+
+  // Warn when the amount is too small to pay every collaborator a non-zero
+  // share. The contract truncates each non-final share: floor(stroops * bps / 10000).
+  // If that rounds to zero, the recipient gets nothing.
+  const minShareBps = splits && splits.length > 1
+    ? Math.min(...splits.map((s) => s.bps))
+    : 10000;
+  const minStroopsForEveryone = Math.ceil(10000 / minShareBps);
+  const tipsPaidAll = stroops >= minStroopsForEveryone;
+  const minAmountForAll = minStroopsForEveryone > 0
+    ? (Number(minStroopsForEveryone) / 1_000_000).toFixed(6)
+    : "0";
 
   // ── Submit ─────────────────────────────────────────────────────────────────
   async function handleTip() {
@@ -146,6 +159,17 @@ export function TipForm({ jarId, slug }: TipFormProps) {
         {step === "error" && error && (
           <div className="rounded-xl bg-danger/10 border border-danger/20 px-4 py-3">
             <p className="text-sm text-danger">{error}</p>
+          </div>
+        )}
+
+        {/* Small-amount warning */}
+        {amountValid && !tipsPaidAll && splits && splits.length > 1 && (
+          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3">
+            <p className="text-sm text-amber-400">
+              This amount is too small to pay every collaborator. Tip at least{" "}
+              <span className="font-semibold">${minAmountForAll} USDC</span>{" "}
+              so every recipient gets a non-zero share.
+            </p>
           </div>
         )}
 
