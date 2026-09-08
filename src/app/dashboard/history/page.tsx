@@ -54,7 +54,12 @@ export default function HistoryPage() {
     analyticsApi
       .recent(jwt, currentLimit)
       .then((r) => {
-        setTips(r.tips);
+        // Append new items beyond what we already have (avoids re-downloading
+        // every page from scratch, preserves scroll position).
+        setTips((prev) => {
+          const newItems = r.tips.slice(prev.length);
+          return [...prev, ...newItems];
+        });
         setHasMore(r.tips.length === currentLimit);
         setError(null);
       })
